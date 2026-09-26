@@ -19,7 +19,7 @@ appsettings.Local.json
 *.pfx
 *.pem
 *.key
-
+/infra/.env
 # Local database artifacts and logs
 *.dump
 *.sql.gz
