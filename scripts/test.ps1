@@ -8,6 +8,6 @@ function Invoke-Step {
 }
 
 Invoke-Step { docker compose --env-file "$root/infra/.env.example" -f "$root/infra/compose.yaml" up -d --wait }
-Invoke-Step { dotnet  build "$root/src/SecureLab.Api/SecureLab.Api.csproj" --configuration Release }
-Invoke-Step { dotnet "$root/src/SecureLab.Api" -- --reset-database }
-Invoke-Step { dotnet  test "$root/tests/SecureLab.Api.Tests/SecureLab.Api.Tests.csproj" --configuration Release }
+Invoke-Step { & "C:\Program Files (x86)\dotnet\dotnet.exe"  build "$root/src/SecureLab.Api/SecureLab.Api.csproj" --configuration Release }
+Invoke-Step { & "C:\Program Files (x86)\dotnet\dotnet.exe" "$root/src/SecureLab.Api" -- --reset-database }
+Invoke-Step { & "C:\Program Files (x86)\dotnet\dotnet.exe"  test "$root/tests/SecureLab.Api.Tests/SecureLab.Api.Tests.csproj" --configuration Release }
