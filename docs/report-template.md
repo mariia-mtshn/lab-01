@@ -5,7 +5,7 @@
 - Варіант: 2-A «Трекер інцидентів».
 - Робоча гілка: `lab/1-system`; основна гілка: `main`.
 - Фінальний тег: `v0.1.0`.
-- Commit hash перевіреного стану: `⟦ВСТАВ результат git rev-parse HEAD⟧`.
+- Commit hash перевіреного стану: `587d7bb743526395bde42d5c27e6ce0cee16d326`.
 - .NET SDK: `⟦ВСТАВ результат dotnet --version⟧`.
 
 ## 2. Стан PostgreSQL
@@ -48,13 +48,36 @@
 | ID | Дія | Очікувано | Фактично |
 |---|---|---|---|
 | T-01 | `GET /health` | 200 | 200 OK, `{"status":"ready"}` |
-| T-02 | `GET /api/incidents?status=Triaged` | 200, відфільтрований список | ⟦ВСТАВ: status і що повернулось⟧ |
-| T-03 | `GET /api/incidents?status=Resolved` | 200, `[]` | ⟦ВСТАВ: status і тіло⟧ |
+| T-02 | `GET /api/incidents?status=Triaged` | 200, відфільтрований список | ⟦HTTP/1.1 200 OK
+Content-Type: application/json; charset=utf-8
+Date: Mon, 28 Sep 2026 19:35:44 GMT
+Server: Kestrel
+Transfer-Encoding: chunked
+X-Content-Type-Options: nosniff
+Referrer-Policy: no-referrer
+
+[{"id":"20000000-0000-0000-0000-000000000001","title":"Підозрілий лист із вкладенням","severity":"Medium","status":"Triaged","occurredAtUtc":"2026-08-01T08:30:00+00:00","createdAtUtc":"2026-08-01T09:00:00+00:00"}]⟧ |
+| T-03 | `GET /api/incidents?status=Resolved` | 200, `[]` | ⟦TTP/1.1 200 OK
+Content-Type: application/json; charset=utf-8
+Date: Mon, 28 Sep 2026 19:36:14 GMT
+Server: Kestrel
+Transfer-Encoding: chunked
+X-Content-Type-Options: nosniff
+Referrer-Policy: no-referrer⟧ |
 | T-04 | `GET /api/incidents/99999999-9999-9999-9999-999999999999` | 404 Problem Details | 404 Not Found, `application/problem+json`, title «Інцидент не знайдено» |
-| T-05 | `GET /api/incidents?status=Unknown` | 400 Validation Problem Details | ⟦ВСТАВ: status і Content-Type⟧ |
+| T-05 | `GET /api/incidents?status=Unknown` | 400 Validation Problem Details | ⟦S C:\Users\Mariia\project2\lab-01> curl.exe -i "http://localhost:5080/api/incidents?status=Unknown"
+HTTP/1.1 400 Bad Request
+Content-Type: application/problem+json
+Date: Mon, 28 Sep 2026 19:36:36 GMT
+Server: Kestrel
+Transfer-Encoding: chunked
+X-Content-Type-Options: nosniff
+Referrer-Policy: no-referrer
+
+{"type":"https://tools.ietf.org/html/rfc9110#section-15.5.1","title":"One or more validation errors occurred.","status":400,"errors":{"status":["Допустимі значення: New, Triaged, InProgress, Resolved, Closed."]},"traceId":"00-558bb13f7669247f7379a0f7afc548bd-b08b4dabfdc4a711-00"}⟧ |
 | T-06 | `GET /api/incidents/severity-summary` | 200; High, Medium, Low по 1; без Critical; порядок за критичністю | 200 OK, `application/json; charset=utf-8`, `[{"severity":"High","count":1},{"severity":"Medium","count":1},{"severity":"Low","count":1}]` |
-| T-07 | натиснути «Показати підсумок» у клієнті | список у DOM; стани завантаження, порожньо, помилка | Список показано (`Груп: 3`; High 1, Medium 1, Low 1). ⟦ВСТАВ: що бачила для станів завантаження / «Даних немає» / помилки⟧ |
-| T-08 | reset seed, повторити T-02 і T-06 | той самий результат | ⟦ВСТАВ: результат після reset⟧ |
+| T-07 | вибрати статус і натиснути «Показати підсумок» у клієнті | список у DOM, що змінюється відповідно до фільтра; стани завантаження, порожньо, помилка | Перевірено всі значення фільтра: Усі → Груп:3 (High:1, Medium:1, Low:1); New → Груп:1 (Low:1); Triaged → Груп:1 (Medium:1); InProgress → Груп:1 (High:1); Resolved → «Даних немає»; Closed → «Даних немає». Стан «Завантаження…» видно при throttling Slow 4G; при зупиненому API — «Не вдалося завантажити підсумок. Спробуйте пізніше.» |
+| T-08 | reset seed, повторити T-02 і T-06 | той самий результат |Reset виконано успішно (TRUNCATE ... RESTART IDENTITY CASCADE, повторне заповнення seed). Після reset summary знову дав 3 групи (High:1, Medium:1, Low:1), усі 15 тестів пройшли. |
 | T-09 | `GET .../severity-summary?status=Triaged` | 200, `[{"severity":"Medium","count":1}]` | 200 OK, `[{"severity":"Medium","count":1}]` |
 | T-10 | `GET .../severity-summary?status=Resolved` | 200, `[]` | 200 OK, `[]` |
 | T-11 | `GET .../severity-summary?status=Unknown` | 400 | 400 Bad Request, `application/problem+json` |
