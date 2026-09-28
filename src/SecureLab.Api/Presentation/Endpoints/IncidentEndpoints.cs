@@ -6,6 +6,9 @@ namespace SecureLab.Api.Presentation.Endpoints;
 
 public static class IncidentEndpoints
 {
+    private static readonly HashSet<string> AllowedStatusNames =
+        new(Enum.GetNames<IncidentStatus>(), StringComparer.OrdinalIgnoreCase);
+
     public static IEndpointRouteBuilder MapIncidentEndpoints(this IEndpointRouteBuilder endpoints)
     {
         var group = endpoints.MapGroup("/api/incidents")
@@ -21,37 +24,61 @@ public static class IncidentEndpoints
             .Produces<IncidentDetailsResponse>()
             .ProducesProblem(StatusCodes.Status404NotFound);
 
-        group.MapGet("/severity-summary", () => Results.Problem(
-                title: "Точку розширення ще не реалізовано",
-                detail: "Завершіть цей endpoint під час лабораторної роботи № 1.",
-                statusCode: StatusCodes.Status501NotImplemented))
+        group.MapGet("/severity-summary", GetSeveritySummaryAsync)
             .WithName("GetIncidentSeveritySummary")
-            .ProducesProblem(StatusCodes.Status501NotImplemented);
+            .Produces<IReadOnlyList<IncidentSeveritySummaryResponse>>()
+            .ProducesValidationProblem();
 
         return endpoints;
     }
+
+    private static bool TryParseStatus(string? status, out IncidentStatus? parsedStatus)
+    {
+        parsedStatus = null;
+        if (status is null)
+        {
+            return true;
+        }
+
+        if (!AllowedStatusNames.Contains(status))
+        {
+            return false;
+        }
+
+        parsedStatus = Enum.Parse<IncidentStatus>(status, ignoreCase: true);
+        return true;
+    }
+
+    private static IResult StatusValidationProblem() =>
+        Results.ValidationProblem(new Dictionary<string, string[]>
+        {
+            ["status"] = ["Допустимі значення: New, Triaged, InProgress, Resolved, Closed."]
+        });
 
     private static async Task<IResult> GetListAsync(
         string? status,
         IncidentQueries queries,
         CancellationToken cancellationToken)
     {
-        IncidentStatus? parsedStatus = null;
-        if (status is not null)
+        if (!TryParseStatus(status, out var parsedStatus))
         {
-            if (!Enum.TryParse<IncidentStatus>(status, ignoreCase: true, out var candidate)
-                || !Enum.IsDefined(candidate))
-            {
-                return Results.ValidationProblem(new Dictionary<string, string[]>
-                {
-                    ["status"] = ["Допустимі значення: New, Triaged, InProgress, Resolved, Closed."]
-                });
-            }
-
-            parsedStatus = candidate;
+            return StatusValidationProblem();
         }
 
         return Results.Ok(await queries.GetListAsync(parsedStatus, cancellationToken));
+    }
+
+    private static async Task<IResult> GetSeveritySummaryAsync(
+        string? status,
+        IncidentQueries queries,
+        CancellationToken cancellationToken)
+    {
+        if (!TryParseStatus(status, out var parsedStatus))
+        {
+            return StatusValidationProblem();
+        }
+
+        return Results.Ok(await queries.GetSeveritySummaryAsync(parsedStatus, cancellationToken));
     }
 
     private static async Task<IResult> GetDetailsAsync(

@@ -25,6 +25,30 @@ Accept: application/json
 GET {{host}}/api/incidents?status=Unknown
 Accept: application/json
 
-### Lab 1 extension point: expected 501 before student implementation
+### Lab 1: severity-summary, expected 200; High, Medium, Low по 1 (порядок за критичністю, Critical відсутній)
 GET {{host}}/api/incidents/severity-summary
+Accept: application/json
+
+### Lab 1: summary зі status=Triaged, expected 200 [{"severity":"Medium","count":1}]
+GET {{host}}/api/incidents/severity-summary?status=Triaged
+Accept: application/json
+
+### Lab 1: summary зі status=Resolved, expected 200 []
+GET {{host}}/api/incidents/severity-summary?status=Resolved
+Accept: application/json
+
+### Lab 1: summary зі status=Unknown, expected 400 Validation Problem Details
+GET {{host}}/api/incidents/severity-summary?status=Unknown
+Accept: application/json
+
+### Lab 1: summary зі status=1 (число), expected 400
+GET {{host}}/api/incidents/severity-summary?status=1
+Accept: application/json
+
+### Lab 1 (знахідка 1): list зі status=1, expected 400 (до виправлення було 200)
+GET {{host}}/api/incidents?status=1
+Accept: application/json
+
+### Lab 1 (знахідка 2): невідомий API-маршрут, expected 404 problem+json (до виправлення було 200 text/html)
+GET {{host}}/api/does-not-exist
 Accept: application/json
