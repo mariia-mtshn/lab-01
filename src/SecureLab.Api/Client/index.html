@@ -16,7 +16,6 @@
     </div>
     <a href="/scalar/v1" target="_blank" rel="noreferrer">OpenAPI</a>
   </header>
-
   <main>
     <section class="panel" aria-labelledby="list-title">
       <div class="toolbar">
@@ -39,12 +38,32 @@
       </div>
       <ul id="incident-list" class="incident-list"></ul>
     </section>
-
     <section class="panel" aria-labelledby="details-title">
       <h2 id="details-title">Деталі</h2>
       <div id="incident-details" class="details-placeholder">
         Виберіть інцидент зі списку.
       </div>
+    </section>
+    <section class="panel panel-wide" aria-labelledby="summary-title">
+      <div class="toolbar">
+        <div>
+          <h2 id="summary-title">Підсумок за severity</h2>
+          <p id="summary-status" role="status">Натисніть «Показати підсумок».</p>
+        </div>
+        <div class="summary-controls">
+          <label for="summary-status-filter">Статус</label>
+          <select id="summary-status-filter">
+            <option value="">Усі</option>
+            <option value="New">New</option>
+            <option value="Triaged">Triaged</option>
+            <option value="InProgress">InProgress</option>
+            <option value="Resolved">Resolved</option>
+            <option value="Closed">Closed</option>
+          </select>
+          <button id="summary-button" type="button">Показати підсумок</button>
+        </div>
+      </div>
+      <ul id="summary-list" class="summary-list"></ul>
     </section>
   </main>
 </body>
