@@ -3,83 +3,296 @@
 ## 1. Ідентифікація стану
 
 - Варіант: 2-A «Трекер інцидентів».
-- Робоча гілка: `lab/1-system`; основна гілка: `main`.
-- Фінальний тег: `v0.1.0`.
-- Commit hash перевіреного стану: `⟦ВСТАВ результат git rev-parse HEAD⟧`.
-- .NET SDK: `⟦ВСТАВ результат dotnet --version⟧`.
+- Робоча гілка: `lab/1-system`.
+- .NET SDK: `10.0.300`.
+- PostgreSQL запускається через Docker Compose.
+- API доступний на `http://localhost:5080`.
+
+Під час виконання лабораторної роботи зміни вносилися в окремій гілці `lab/1-system`. Локальний файл `infra/.env` не відстежується Git відповідно до правила `.gitignore`.
 
 ## 2. Стан PostgreSQL
 
-Вивід `docker compose --env-file infra/.env.example -f infra/compose.yaml ps` (стан `healthy`):
+PostgreSQL запускається командою:
 
 ```text
-⟦ВСТАВ короткий вивід docker compose ps⟧
+docker compose --env-file infra/.env.example -f infra/compose.yaml up -d --wait
 ```
 
-Запит `GET /health` повернув `200 OK`, тіло `{"status":"ready"}`.
+Після запуску контейнер PostgreSQL переходить у стан `healthy`.
+
+Readiness endpoint:
+
+```text
+GET /health
+```
+
+повертає:
+
+```json
+{"status":"ready"}
+```
+
+з HTTP status `200 OK`.
+
+Це підтверджує, що API успішно працює та може взаємодіяти з PostgreSQL.
 
 ## 3. Змінений маршрут
 
-```text
-кнопка «Показати підсумок» → loadSeveritySummary (Client/app.js)
-  → GET /api/incidents/severity-summary[?status=...]
-  → IncidentEndpoints.GetSeveritySummaryAsync
-  → IncidentQueries.GetSeveritySummaryAsync
-      (AsNoTracking, GroupBy, Count, ToListAsync)
-  → SecureLabDbContext.Incidents / таблиця incidents
-  → IncidentSeveritySummaryResponse як JSON
-  → textContent у списку підсумку
-```
+Наскрізний маршрут реалізованого функціоналу:
 
-Детальна карта, межі довіри й конфігураційні входи описані в `docs/architecture.md`.
+```text
+кнопка «Показати підсумок»
+    ↓
+loadSeveritySummary() у Client/app.js
+    ↓
+GET /api/incidents/severity-summary[?status=...]
+    ↓
+IncidentEndpoints.GetSeveritySummaryAsync()
+    ↓
+IncidentQueries.GetSeveritySummaryAsync()
+    ↓
+AsNoTracking()
+    ↓
+GroupBy(Severity)
+    ↓
+Count()
+    ↓
+ToListAsync()
+    ↓
+PostgreSQL / таблиця incidents
+    ↓
+IncidentSeveritySummaryResponse
+    ↓
+JSON response
+    ↓
+textContent у browser client
+```
 
 ## 4. Що реалізовано
 
-- Замість baseline 501 endpoint повертає 200 і JSON-масив елементів `{severity, count}`.
-- Окремий response DTO `IncidentSeveritySummaryResponse` без зайвих полів entity.
-- Політика нульових груп: лише наявні групи. Порядок сталий: Critical → High → Medium → Low.
-- Необов'язковий параметр `?status=` з явним allowlist; невідоме значення дає 400 Validation Problem Details.
-- Клієнт: кнопка, вибір статусу, стани «Завантаження…», «Даних немає» і безпечне фіксоване повідомлення про помилку; DOM тільки через `textContent`.
-- Структуроване журналювання з `TraceId` без чутливих даних.
-- Автоматичні тести й `.http`-сценарії (`tests/http/incidents.http`).
+Реалізовано endpoint:
+
+```text
+GET /api/incidents/severity-summary
+```
+
+який повертає кількість інцидентів за рівнем severity.
+
+Приклад відповіді:
+
+```json
+[
+  {"severity":"High","count":1},
+  {"severity":"Medium","count":1},
+  {"severity":"Low","count":1}
+]
+```
+
+Реалізовано:
+
+- окремий response DTO `IncidentSeveritySummaryResponse`;
+- групування інцидентів за `Severity`;
+- підрахунок кількості через `Count()`;
+- `AsNoTracking()` для read-only запиту;
+- необов'язковий параметр `status`;
+- allowlist допустимих статусів;
+- HTTP `400 Validation ProblemDetails` для некоректного status;
+- сталий порядок severity: `Critical → High → Medium → Low`;
+- політику «лише наявні групи»;
+- browser client із кнопкою та фільтром статусу;
+- стани «Завантаження…», «Даних немає» та повідомлення про помилку;
+- безпечне виведення результатів через `textContent`;
+- структуроване журналювання з `TraceId`.
 
 ## 5. Результати перевірки
 
 | ID | Дія | Очікувано | Фактично |
 |---|---|---|---|
-| T-01 | `GET /health` | 200 | 200 OK, `{"status":"ready"}` |
-| T-02 | `GET /api/incidents?status=Triaged` | 200, відфільтрований список | ⟦ВСТАВ: status і що повернулось⟧ |
-| T-03 | `GET /api/incidents?status=Resolved` | 200, `[]` | ⟦ВСТАВ: status і тіло⟧ |
-| T-04 | `GET /api/incidents/99999999-9999-9999-9999-999999999999` | 404 Problem Details | 404 Not Found, `application/problem+json`, title «Інцидент не знайдено» |
-| T-05 | `GET /api/incidents?status=Unknown` | 400 Validation Problem Details | ⟦ВСТАВ: status і Content-Type⟧ |
-| T-06 | `GET /api/incidents/severity-summary` | 200; High, Medium, Low по 1; без Critical; порядок за критичністю | 200 OK, `application/json; charset=utf-8`, `[{"severity":"High","count":1},{"severity":"Medium","count":1},{"severity":"Low","count":1}]` |
-| T-07 | натиснути «Показати підсумок» у клієнті | список у DOM; стани завантаження, порожньо, помилка | Список показано (`Груп: 3`; High 1, Medium 1, Low 1). ⟦ВСТАВ: що бачила для станів завантаження / «Даних немає» / помилки⟧ |
-| T-08 | reset seed, повторити T-02 і T-06 | той самий результат | ⟦ВСТАВ: результат після reset⟧ |
-| T-09 | `GET .../severity-summary?status=Triaged` | 200, `[{"severity":"Medium","count":1}]` | 200 OK, `[{"severity":"Medium","count":1}]` |
-| T-10 | `GET .../severity-summary?status=Resolved` | 200, `[]` | 200 OK, `[]` |
-| T-11 | `GET .../severity-summary?status=Unknown` | 400 | 400 Bad Request, `application/problem+json` |
-| T-12 | `GET .../severity-summary?status=1` | 400 | 400 Bad Request, `application/problem+json` |
+| T-01 | `GET /health` | 200 | `200 OK`, `{"status":"ready"}` |
+| T-02 | `GET /api/incidents?status=Triaged` | 200, один інцидент | `200 OK`, повернуто один інцидент зі статусом `Triaged` |
+| T-03 | `GET /api/incidents?status=Resolved` | 200, `[]` | `200 OK`, порожній JSON-масив `[]` |
+| T-04 | `GET /api/incidents/99999999-9999-9999-9999-999999999999` | 404 Problem Details | `404 Not Found`, `application/problem+json`, title «Інцидент не знайдено» |
+| T-05 | `GET /api/incidents?status=Unknown` | 400 Validation ProblemDetails | `400 Bad Request`, `application/problem+json` |
+| T-06 | `GET /api/incidents/severity-summary` | 200; High, Medium, Low по 1 | `200 OK`, `High:1`, `Medium:1`, `Low:1` |
+| T-07 | Фільтр статусу у browser client | Дані змінюються відповідно до фільтра | Усі → 3 групи; New → Low:1; Triaged → Medium:1; InProgress → High:1; Resolved/Closed → «Даних немає» |
+| T-08 | Reset seed та повторна перевірка | Той самий результат | Reset виконано, після reset summary знову повертає 3 групи |
+| T-09 | `GET /api/incidents/severity-summary?status=Triaged` | 200, `Medium:1` | `200 OK`, `[{"severity":"Medium","count":1}]` |
+| T-10 | `GET /api/incidents/severity-summary?status=Resolved` | 200, `[]` | `200 OK`, `[]` |
+| T-11 | `GET /api/incidents/severity-summary?status=Unknown` | 400 | `400 Bad Request`, `application/problem+json` |
+| T-12 | `GET /api/incidents/severity-summary?status=1` | 400 | `400 Bad Request`, `application/problem+json` |
+
+У browser client також перевірено стани завантаження та помилки API. При вимкненому API відображається фіксоване повідомлення:
+
+```text
+Не вдалося завантажити підсумок. Спробуйте пізніше.
+```
 
 ## 6. Знахідки в starter
 
-**Знахідка 1: слабка валідація `status`.**
-До виправлення `GET /api/incidents?status=1` повертав 200 і список: `Enum.TryParse` перетворював число на значення enum, а `Enum.IsDefined` його пропускав. Так само проходили значення на кшталт `New,Triaged`. Причина: перевірка спиралась на парсинг enum, а не на явний перелік допустимих значень (`IncidentEndpoints.GetListAsync`). Виправлення: allowlist назв статусів у `IncidentEndpoints.TryParseStatus`, спільний для list і summary. Після виправлення: `?status=1` → 400, `?status=New,Triaged` → 400 (обидва `application/problem+json`). Регресійні тести: `GetList_WithInvalidStatus_Returns400`, `GetSeveritySummary_WithInvalidStatus_Returns400`.
+### Знахідка 1: слабка валідація `status`
 
-**Знахідка 2: невідомий API-маршрут повертав HTML.**
-До виправлення `GET /api/does-not-exist` повертав 200 з `Content-Type: text/html` (запасний маршрут `MapFallbackToFile("index.html")`), тож клієнт API не міг відрізнити помилку маршруту від успіху. Виправлення: маршрут `/api/{**path}` у `Program.cs` перед запасним маршрутом. Після виправлення: 404 з `application/problem+json`. Регресійний тест: `UnknownApiRoute_ReturnsProblemDetails404_NotHtmlFallback`.
+До виправлення:
+
+```text
+GET /api/incidents?status=1
+```
+
+міг повертати `200`, оскільки попередня перевірка використовувала парсинг enum.
+
+Також могли проходити значення, які не є одним допустимим статусом, наприклад:
+
+```text
+New,Triaged
+```
+
+Проблема полягала в тому, що перевірка спиралася на парсинг enum, а не на явний перелік дозволених назв.
+
+Виправлення виконано в `IncidentEndpoints.TryParseStatus()` за допомогою allowlist:
+
+```text
+New
+Triaged
+InProgress
+Resolved
+Closed
+```
+
+Після виправлення:
+
+```text
+?status=1
+```
+
+та
+
+```text
+?status=New,Triaged
+```
+
+повертають `400 Bad Request`.
+
+Додано регресійні тести для list та summary endpoint.
+
+### Знахідка 2: невідомий API-маршрут повертав HTML
+
+До виправлення:
+
+```text
+GET /api/does-not-exist
+```
+
+міг потрапити на SPA fallback і повернути `index.html` із `200 OK`.
+
+Це некоректно для API, оскільки клієнт очікує HTTP-помилку, а не HTML-сторінку.
+
+У `Program.cs` додано окрему обробку:
+
+```text
+/api/{**path}
+```
+
+перед SPA fallback.
+
+Після виправлення невідомий API-маршрут повертає:
+
+```text
+404 Not Found
+Content-Type: application/problem+json
+```
+
+Для цієї поведінки також додано регресійний тест.
 
 ## 7. Автоматична перевірка
 
-Команда: `powershell -ExecutionPolicy Bypass -File .\scripts\test.ps1` (піднімає PostgreSQL, збирає проєкт, відновлює seed, запускає `dotnet test`).
+Для автоматичної перевірки використовується:
 
-Фактичний результат: `⟦ВСТАВ рядок Test summary: total: …; failed: …; succeeded: …⟧`.
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\test.ps1
+```
 
-Перед дописаними тестами baseline мав 4 тести; нові тести покривають summary (порядок, поля, фільтр, порожній результат, некоректні значення) і обидві знахідки.
+Скрипт:
 
-## 8. Перегляд diff
+1. запускає PostgreSQL через Docker Compose;
+2. збирає API;
+3. виконує reset seed;
+4. запускає автоматичні тести.
 
-Перед кожним commit переглянуто `git status`, `git diff` і `git diff --staged`. Секретів, `.env`, cookies, токенів, дампів БД і журналів у staged diff немає. Відкриті навчальні облікові дані локального стенда (`securelab` / `local-study-password`) залишилися лише в `infra/compose.yaml` і `appsettings.Development.json`, як передбачає baseline.
+Фактичний результат:
 
-## 9. Висновок
+```text
+Test summary: total: 15, failed: 0, succeeded: 15, skipped: 0
+```
 
-Endpoint `GET /api/incidents/severity-summary` реалізовано за контрактом: 200 із сталим порядком груп, окремий DTO без зайвих полів, allowlist для `status`, безпечний вивід у DOM. У ході роботи виявлено й виправлено дві проблеми starter (слабка валідація `status` і HTML-відповідь для невідомого `/api/...`), для кожної додано регресійні тести. Стенд відтворюється через seed/reset, результат зафіксовано в тегу `v0.1.0`.
+Таким чином, усі 15 автоматичних тестів пройшли успішно.
+
+Baseline містив 4 тести. Додані тести перевіряють:
+
+- endpoint severity summary;
+- порядок груп;
+- поля response;
+- фільтрацію за status;
+- порожній результат;
+- некоректні значення status;
+- невідомий API-маршрут;
+- відсутність небезпечного `innerHTML`.
+
+## 8. Перегляд diff та робота з конфігурацією
+
+Перед commit перевірялися:
+
+```text
+git status
+git diff
+git diff --staged
+```
+
+Локальний файл:
+
+```text
+infra/.env
+```
+
+не відстежується Git.
+
+У репозиторії використовується:
+
+```text
+infra/.env.example
+```
+
+як приклад необхідних змінних середовища.
+
+## 9. Git
+
+Робота виконувалася у гілці:
+
+```text
+lab/1-system
+```
+
+Зміни були розділені на окремі змістовні commits.
+
+
+## 10. Висновок
+
+У ході лабораторної роботи було розгорнуто та перевірено вебсистему, що складається з browser client, ASP.NET Core Web API та PostgreSQL у Docker Compose.
+
+Реалізовано endpoint:
+
+```text
+GET /api/incidents/severity-summary
+```
+
+який виконує групування інцидентів за severity та повертає кількість записів у кожній наявній групі.
+
+Для реалізації використано `AsNoTracking`, `GroupBy`, `Count` і `ToListAsync`. Результат повертається через окремий response DTO. Додано необов'язковий параметр `status` із серверною allowlist-валідацією та обробкою некоректних значень через `400 Validation ProblemDetails`.
+
+У browser client реалізовано відображення результату, стани завантаження та порожнього результату, а також безпечне додавання тексту до DOM через `textContent`.
+
+Під час дослідження starter було виявлено та виправлено дві проблеми: слабку валідацію параметра `status` та повернення HTML для невідомих API-маршрутів через SPA fallback. Для виправлень додано регресійні тести.
+
+Фінальна автоматична перевірка завершилася результатом:
+
+```text
+15 tests passed, 0 failed, 0 skipped.
+```
