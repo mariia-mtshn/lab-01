@@ -91,3 +91,12 @@ Content-Type: application/json
 
 ### T-06 
 GET {{baseUrl}}/api/incidents/99999999-9999-9999-9999-999999999999
+
+### A
+GET {{baseUrl}}/api/incidents/search?q=USB
+### B
+GET {{baseUrl}}/api/incidents/search?q=zz-no-match
+### C (контрольний ввід, з пробілом наприкінці)
+GET {{baseUrl}}/api/incidents/search?q=zz-no-match%27%20OR%20TRUE%20--%20
+### D апостроф
+GET {{baseUrl}}/api/incidents/search?q=O%27Brien
