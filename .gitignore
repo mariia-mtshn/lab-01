@@ -25,3 +25,5 @@ appsettings.Local.json
 *.sql.gz
 *.log
 
+# Lab 2 : Evidence
+**/evidence/
