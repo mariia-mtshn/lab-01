@@ -66,9 +66,10 @@ public sealed class IncidentEndpointTests(SecureLabApiFactory factory)
 
         Assert.NotNull(summary);
         Assert.Equal(new[] { "High", "Medium", "Low" }, summary.Select(item => item.Severity));
-        Assert.All(summary, item => Assert.Equal(1, item.Count));
+        Assert.Equal(new[] {1, 1, 3}, summary.Select(item => item.Count));
     }
 
+    
     [Fact]
     public async Task GetSeveritySummary_ReturnsOnlySeverityAndCountFields()
     {

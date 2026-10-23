@@ -1,3 +1,4 @@
+using SecureLab.Api.Scaffolding;
 using System.Diagnostics;
 using Microsoft.EntityFrameworkCore;
 using Scalar.AspNetCore;
@@ -100,6 +101,7 @@ app.MapGet(
     .ProducesProblem(StatusCodes.Status503ServiceUnavailable);
 
 app.MapIncidentEndpoints();
+app.MapLab02Endpoints();
 
 app.Map(
         "/api/{**path}",

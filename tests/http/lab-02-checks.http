@@ -1,0 +1,4 @@
+@baseUrl = http://localhost:5080
+
+### USB
+GET {{baseUrl}}/api/incidents/search?q=USB
